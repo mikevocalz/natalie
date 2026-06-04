@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>N.A.T.A.L.I.E. — AI Study Companion</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Courier New', monospace;
+      background: #08090f;
+      color: #eef2f7;
+      line-height: 1.6;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 20px;
+    }
+    section {
+      padding: 80px 0;
+      border-bottom: 1px solid rgba(180,200,222,0.12);
+    }
+    h1, h2, h3 {
+      font-weight: bold;
+      letter-spacing: -0.01em;
+      line-height: 1.12;
+    }
+    h1 {
+      font-size: clamp(36px, 8vw, 88px);
+      margin-bottom: 24px;
+    }
+    h2 {
+      font-size: clamp(26px, 4.5vw, 42px);
+      margin-bottom: 24px;
+    }
+    h3 {
+      font-size: 24px;
+      margin-bottom: 16px;
+    }
+    p {
+      font-size: clamp(17px, 2.4vw, 21px);
+      color: #cfe2f5;
+      max-width: 62ch;
+      margin-bottom: 24px;
+    }
+    .kicker {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.32em;
+      color: #3da5ff;
+    }
+    .kicker::before {
+      content: '';
+      width: 24px;
+      height: 1px;
+      background: #3da5ff;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      border-radius: 20px;
+      background: rgba(61,165,255,0.1);
+      border: 1px solid rgba(61,165,255,0.2);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.2em;
+      color: #3da5ff;
+      margin-bottom: 24px;
+    }
+    .badge-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #3da5ff;
+    }
+    .meta-stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 24px;
+      margin-top: 48px;
+      padding-top: 32px;
+      border-top: 1px solid rgba(180,200,222,0.1);
+    }
+    .stat-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.2em;
+      color: #6c7e90;
+      margin-bottom: 4px;
+    }
+    .stat-value {
+      font-size: 14px;
+      color: #eef2f7;
+      font-weight: 500;
+    }
+    .pillars {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      margin-top: 32px;
+    }
+    .pillar {
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+    }
+    .pillar-number {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      font-weight: bold;
+      font-size: 18px;
+      color: #02121a;
+      flex-shrink: 0;
+    }
+    .pillar-content h3 {
+      font-size: 20px;
+      margin-bottom: 8px;
+    }
+    .pillar-content p {
+      font-size: 16px;
+      color: #c3d6ea;
+      margin: 0;
+    }
+    .gallery {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-top: 32px;
+    }
+    .gallery-card {
+      position: relative;
+      aspect-ratio: 4/3;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid rgba(180,200,222,0.12);
+      background: #0e0f17;
+    }
+    .gallery-card img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      opacity: 0.7;
+    }
+    .gallery-overlay {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(to top, #08090f 0%, transparent 60%);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+    }
+    .gallery-source {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.2em;
+      color: #3da5ff;
+      margin-bottom: 4px;
+    }
+    .gallery-title {
+      font-size: 14px;
+      font-weight: 500;
+      margin-bottom: 4px;
+    }
+    .gallery-desc {
+      font-size: 12px;
+      color: #a2b2c2;
+    }
+    .cta-button {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 24px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #3da5ff, #2a7fcc);
+      color: white;
+      text-decoration: none;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      font-weight: 600;
+      margin-top: 24px;
+    }
+    .secondary-button {
+      background: rgba(12,22,40,0.6);
+      border: 1px solid rgba(180,200,222,0.15);
+      color: #a2b2c2;
+      margin-left: 12px;
+    }
+    @media (max-width: 768px) {
+      .meta-stats {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .gallery {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+    @media (max-width: 480px) {
+      .gallery {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Hero Section -->
+<section id="hero">
+  <div class="container">
+    <div class="kicker">01 — The Vision</div>
+    <span class="badge"><span class="badge-dot"></span>For Kids 8-18</span>
+    <span style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.2em; color: #6c7e90; margin-left: 12px;">Grades 3-12 · Homework Help</span>
+    
+    <h1>Math got you stuck?<br>Ask Natalie.</h1>
+    
+    <p style="font-size: clamp(18px, 2.8vw, 24px);">
+      <strong style="color: #eef2f7;">The AI study companion</strong> that helps kids learn without cheating. 
+      <strong style="color: #eef2f7;">Show her your worksheet</strong>, and she <strong style="color: #eef2f7;">walks you through it</strong> — patient, encouraging, and never just giving answers.
+    </p>
+    
+    <a href="#vision" class="cta-button">Explore Concept ↓</a>
+    <a href="#concept" class="cta-button secondary-button">View Architecture</a>
+    
+    <div class="meta-stats">
+      <div>
+        <div class="stat-label">For Ages</div>
+        <div class="stat-value">8 to 18</div>
+      </div>
+      <div>
+        <div class="stat-label">Grades</div>
+        <div class="stat-value">3rd - 12th</div>
+      </div>
+      <div>
+        <div class="stat-label">Students</div>
+        <div class="stat-value">20 Interviewed</div>
+      </div>
+      <div>
+        <div class="stat-label">Focus</div>
+        <div class="stat-value">Homework Help</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Concept Section with Pillars and Galleries -->
+<section id="concept">
+  <div class="container">
+    <div class="kicker">05 — The Concept</div>
+    <h2>How Natalie helps kids learn</h2>
+    <p>From 3rd grade multiplication to 12th grade SAT prep, Natalie adapts to every age. She's not just an AI tutor — she's a patient study buddy who explains, encourages, and never gives away the answers.</p>
+    
+    <!-- Three Pillars -->
+    <div class="pillars">
+      <div class="pillar">
+        <div class="pillar-number" style="background: #3da5ff;">1</div>
+        <div class="pillar-content">
+          <h3>Show & Learn</h3>
+          <p>Maya (8) holds up her math worksheet. Natalie scans it, identifies she's struggling with fractions, and creates a lesson plan right then. No typing, no searching — just show and learn. From elementary phonics to high school calculus, she adapts to every level.</p>
+        </div>
+      </div>
+      <div class="pillar">
+        <div class="pillar-number" style="background: #9ec9ef;">2</div>
+        <div class="pillar-content">
+          <h3>Never Gives the Answer</h3>
+          <p>When Jordan (12) asks for the answer to his volcano project, Natalie doesn't tell him. Instead: "What do you think makes magma rise?" She guides, asks questions, celebrates breakthroughs. Kids learn by thinking, not copying. That's real understanding.</p>
+        </div>
+      </div>
+      <div class="pillar">
+        <div class="pillar-number" style="background: #5af0c0;">3</div>
+        <div class="pillar-content">
+          <h3>Voice-First Help</h3>
+          <p>Alex (15) is sketching a diagram and stuck on step 3. "Natalie, what's next?" he asks, hands covered in pencil dust. She narrates the explanation while he keeps working. No stopping to type, no broken focus — just talk and learn.</p>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Concept Sketches Gallery -->
+    <div style="margin-top: 64px; padding-top: 48px; border-top: 1px solid rgba(180,200,222,0.12);">
+      <div class="kicker" style="color: #9ec9ef;"><span style="background: #9ec9ef;"></span>Behind the Design</div>
+      <h3>Concept Sketches & Art</h3>
+      <p style="font-size: 16px; color: #a2b2c2;">From early wireframe holograms to the final character design, explore the artistic journey of creating Natalie's visual identity.</p>
+      
+      <div class="gallery">
+        <div class="gallery-card">
+          <img src="images/concept/natalie-sketch.png" alt="Natalie Concept Sketch">
+          <div class="gallery-overlay">
+            <div class="gallery-source">Pencil Sketch</div>
+            <div class="gallery-title">Natalie AI Assistant</div>
+            <div class="gallery-desc">Early concept sketch showing holographic tutoring session</div>
+          </div>
+        </div>
+        <div class="gallery-card">
+          <img src="images/concept/natalie-render.png" alt="Natalie Final Render">
+          <div class="gallery-overlay">
+            <div class="gallery-source">Production Art</div>
+            <div class="gallery-title">N.A.T.A.L.I.E. AI Tutor</div>
+            <div class="gallery-desc">Final rendered concept with holographic interface</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Comic Series Gallery -->
+    <div style="margin-top: 48px; padding-top: 48px; border-top: 1px solid rgba(180,200,222,0.12);">
+      <div class="kicker" style="color: #5af0c0;"><span style="background: #5af0c0;"></span>Comic Series</div>
+      <h3>Natalie in the Comics</h3>
+      <p style="font-size: 16px; color: #a2b2c2;">From her first appearance as a holographic study companion to the latest series, see how Natalie has evolved across 8 comic issues helping kids learn.</p>
+      
+      <div class="gallery">
+        <div class="gallery-card">
+          <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS3GxHL8-Z3uaWGiONDI_g0vFnPQpG2wsWVkw&s" alt="Natalie v1.0">
+          <div class="gallery-overlay">
+            <div class="gallery-source">Comic Series #1</div>
+            <div class="gallery-title">Natalie v1.0</div>
+            <div class="gallery-desc">First appearance - The holographic study companion</div>
+          </div>
+        </div>
+        <div class="gallery-card">
+          <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTFZ7jpeEvmteZkKeLobg-oPgnesfO4I4JCyA&s" alt="The Lab Sessions">
+          <div class="gallery-overlay">
+            <div class="gallery-source">Comic Series #3</div>
+            <div class="gallery-title">The Lab Sessions</div>
+            <div class="gallery-desc">Natalie helping Maya with fractions</div>
+          </div>
+        </div>
+        <div class="gallery-card">
+          <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRU7Z1Cu5FjX6LlnRyE9nRefsjjPHGeHRA2nDbSgelqkg&s" alt="The Upgrade">
+          <div class="gallery-overlay">
+            <div class="gallery-source">Comic Series #8</div>
+            <div class="gallery-title">The Upgrade</div>
+            <div class="gallery-desc">Natalie 2.0 with enhanced viseme recognition</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Disney+ TV Series Gallery -->
+    <div style="margin-top: 48px; padding-top: 48px; border-top: 1px solid rgba(180,200,222,0.12);">
+      <div class="kicker"><span></span>Disney+ Original</div>
+      <h3>Natalie: The Series</h3>
+      <p style="font-size: 16px; color: #a2b2c2;">Streaming now on Disney+. Follow Natalie as she helps students tackle challenges from science fairs to standardized tests across 10 episodes.</p>
+      
+      <div class="gallery">
+        <div class="gallery-card">
+          <img src="images/tv-series/Natalie_Washington_Infobox.webp" alt="Series Premiere">
+          <div class="gallery-overlay">
+            <div class="gallery-source">Disney+ S1:E1</div>
+            <div class="gallery-title">Series Premiere</div>
+            <div class="gallery-desc">Natalie awakens in the study lab</div>
+          </div>
+        </div>
+        <div class="gallery-card">
+          <img src="images/tv-series/Natalie-in-Ironheart.webp" alt="The Study Group">
+          <div class="gallery-overlay">
+            <div class="gallery-source">Disney+ S1:E4</div>
+            <div class="gallery-title">The Study Group</div>
+            <div class="gallery-desc">Natalie mentors the after-school club</div>
+          </div>
+        </div>
+        <div class="gallery-card">
+          <img src="https://m.media-amazon.com/images/M/MV5BZDU2MDIyZjgtNGI0OS00ZGI5LTg5MWMtMzlmNzExMDEyYWI4XkEyXkFqcGc@._V1_.jpg" alt="Holographic Helper">
+          <div class="gallery-overlay">
+            <div class="gallery-source">Disney+ S1:E7</div>
+            <div class="gallery-title">Holographic Helper</div>
+            <div class="gallery-desc">Visual learning with spatial projections</div>
+          </div>
+        </div>
+        <div class="gallery-card">
+          <img src="https://static0.polygonimages.com/wordpress/wp-content/uploads/2025/06/ironheart-marvel-1.jpg" alt="Season Finale">
+          <div class="gallery-overlay">
+            <div class="gallery-source">Disney+ S1:E10</div>
+            <div class="gallery-title">Season Finale</div>
+            <div class="gallery-desc">Natalie saves finals week</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Demo Section -->
+<section id="demo" style="text-align: center;">
+  <div class="container">
+    <div class="kicker">06 — Live Demo</div>
+    <h2>See Natalie in Action</h2>
+    <p>Try the interactive demo. Watch as she responds with voice, animated visemes, and the holographic 3D avatar.</p>
+    <a href="#" class="cta-button" style="margin-top: 32px;">Launch Demo →</a>
+  </div>
+</section>
+
+<!-- Footer -->
+<section style="text-align: center; padding: 40px 0;">
+  <div class="container">
+    <p style="font-size: 14px; color: #6c7e90; margin: 0;">N.A.T.A.L.I.E. — Neural Adaptive Tutoring AI for Learning & Education</p>
+    <p style="font-size: 12px; color: #6c7e90; margin-top: 8px;">© 2026 Concept Case Study</p>
+  </div>
+</section>
+
+</body>
+</html>
