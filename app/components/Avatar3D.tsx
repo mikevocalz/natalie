@@ -22,20 +22,20 @@ interface Avatar3DProps {
 // map each to the closest CC4 blendshape + a jaw-open amount.
 const VISEME_TO_CC: Record<string, { morph: string; amt: number; jaw: number }> = {
   viseme_sil: { morph: "Mouth_Close", amt: 0.12, jaw: 0 },
-  viseme_PP: { morph: "V_Explosive", amt: 0.9, jaw: 0 },
-  viseme_FF: { morph: "V_Dental_Lip", amt: 0.8, jaw: 0.05 },
-  viseme_TH: { morph: "V_Open", amt: 0.35, jaw: 0.18 },
-  viseme_DD: { morph: "V_Lip_Open", amt: 0.55, jaw: 0.2 },
-  viseme_kk: { morph: "V_Lip_Open", amt: 0.5, jaw: 0.25 },
-  viseme_CH: { morph: "V_Affricate", amt: 0.8, jaw: 0.15 },
-  viseme_SS: { morph: "V_Tight", amt: 0.7, jaw: 0.06 },
-  viseme_nn: { morph: "V_Lip_Open", amt: 0.45, jaw: 0.12 },
-  viseme_RR: { morph: "V_Tight_O", amt: 0.6, jaw: 0.15 },
-  viseme_aa: { morph: "V_Open", amt: 0.95, jaw: 0.55 },
-  viseme_E: { morph: "V_Wide", amt: 0.8, jaw: 0.28 },
-  viseme_I: { morph: "V_Wide", amt: 0.7, jaw: 0.2 },
-  viseme_O: { morph: "V_Tight_O", amt: 0.85, jaw: 0.38 },
-  viseme_U: { morph: "V_Tight_O", amt: 0.9, jaw: 0.25 },
+  viseme_PP: { morph: "V_Explosive", amt: 1.0, jaw: 0.05 },
+  viseme_FF: { morph: "V_Dental_Lip", amt: 1.0, jaw: 0.12 },
+  viseme_TH: { morph: "V_Open", amt: 0.6, jaw: 0.32 },
+  viseme_DD: { morph: "V_Lip_Open", amt: 0.85, jaw: 0.4 },
+  viseme_kk: { morph: "V_Lip_Open", amt: 0.8, jaw: 0.45 },
+  viseme_CH: { morph: "V_Affricate", amt: 1.0, jaw: 0.3 },
+  viseme_SS: { morph: "V_Tight", amt: 0.9, jaw: 0.12 },
+  viseme_nn: { morph: "V_Lip_Open", amt: 0.7, jaw: 0.28 },
+  viseme_RR: { morph: "V_Tight_O", amt: 0.85, jaw: 0.3 },
+  viseme_aa: { morph: "V_Open", amt: 1.0, jaw: 0.85 },
+  viseme_E: { morph: "V_Wide", amt: 1.0, jaw: 0.5 },
+  viseme_I: { morph: "V_Wide", amt: 0.9, jaw: 0.4 },
+  viseme_O: { morph: "V_Tight_O", amt: 1.0, jaw: 0.65 },
+  viseme_U: { morph: "V_Tight_O", amt: 1.0, jaw: 0.45 },
 };
 
 // Every morph name we actively drive (so non-active ones relax back to 0).
@@ -44,7 +44,13 @@ const MOUTH_MORPHS = [
   "V_Lip_Open", "V_Dental_Lip", "V_Affricate", "V_Tight",
   "Jaw_Open", "Mouth_Close",
 ];
-const MORPH_NAMES = [...MOUTH_MORPHS, "Eye_Blink_L", "Eye_Blink_R"];
+// Expression blendshapes layered on top of the visemes for a lifelike face.
+const EXPR_MORPHS = [
+  "Brow_Raise_Inner_L", "Brow_Raise_Inner_R", "Brow_Raise_Outer_L", "Brow_Raise_Outer_R",
+  "Mouth_Smile_L", "Mouth_Smile_R", "Cheek_Raise_L", "Cheek_Raise_R",
+  "Eye_L_Look_L", "Eye_R_Look_L", "Eye_L_Look_R", "Eye_R_Look_R",
+];
+const MORPH_NAMES = [...MOUTH_MORPHS, "Eye_Blink_L", "Eye_Blink_R", ...EXPR_MORPHS];
 
 // Set a blendshape (by its final-segment name) across all morph-bearing meshes.
 function setMorphInfluence(meshes: THREE.Mesh[], name: string, value: number) {
@@ -73,6 +79,8 @@ function FBXAvatar({ isSpeaking, modelUrl = "/models/nat.fbx" }: Avatar3DProps) 
   const morphMeshesRef = useRef<THREE.Mesh[]>([]);
   const morphValsRef = useRef<Record<string, number>>({});
   const blinkRef = useRef({ next: 1.5, closing: 0 });
+  const volEnvRef = useRef(1e-4);
+  const saccadeRef = useRef({ next: 1, x: 0 });
 
   // Load FBX file
   useEffect(() => {
@@ -113,19 +121,25 @@ function FBXAvatar({ isSpeaking, modelUrl = "/models/nat.fbx" }: Avatar3DProps) 
             object.frustumCulled = false;
             object.geometry?.computeBoundingSphere?.();
             object.geometry?.computeBoundingBox?.();
-            const holo = new THREE.MeshStandardMaterial({
-              color: new THREE.Color("#9ec9ef"),
-              emissive: new THREE.Color("#1a5a99"),
-              emissiveIntensity: 0.15,
-              metalness: 0.3,
-              roughness: 0.55,
-            });
-            object.material = Array.isArray(object.material)
-              ? object.material.map(() => holo)
-              : holo;
+            // Recolor the EXISTING materials in place (don't replace the
+            // material object — that drops the morph-target binding so the face
+            // can't animate). Drop the unresolved textures and apply the
+            // holographic blue look.
+            const mats = Array.isArray(object.material) ? object.material : [object.material];
+            for (const mat of mats) {
+              const m = mat as THREE.MeshStandardMaterial;
+              m.map = null;
+              m.color?.set("#9ec9ef");
+              m.emissive?.set("#1a5a99");
+              if (m.emissiveIntensity !== undefined) m.emissiveIntensity = 0.15;
+              if (m.metalness !== undefined) m.metalness = 0.3;
+              if (m.roughness !== undefined) m.roughness = 0.55;
+              m.transparent = false;
+              m.needsUpdate = true;
+            }
           }
         });
-        
+
         morphMeshesRef.current = morphMeshes;
         setScene(fbx);
       },
@@ -149,7 +163,7 @@ function FBXAvatar({ isSpeaking, modelUrl = "/models/nat.fbx" }: Avatar3DProps) 
 
     // --- Drive CC4 facial blendshapes from wawa-lipsync ---
     const targets: Record<string, number> = {};
-    for (const name of MOUTH_MORPHS) targets[name] = 0;
+    for (const name of MORPH_NAMES) targets[name] = 0;
 
     const mgr = getLipsyncManager();
     if (isSpeaking && mgr) {
@@ -157,11 +171,53 @@ function FBXAvatar({ isSpeaking, modelUrl = "/models/nat.fbx" }: Avatar3DProps) 
       // model's CC4 blendshapes.
       mgr.processAudio();
       const cc = VISEME_TO_CC[mgr.viseme] ?? VISEME_TO_CC.viseme_sil;
-      targets[cc.morph] = cc.amt;
-      if (cc.jaw) targets["Jaw_Open"] = cc.jaw;
+
+      // Normalize loudness to 0..1 with a decaying running max (wawa's volume
+      // scale is arbitrary) to drive emphasis-based expression.
+      const vol = mgr.features?.volume ?? 0;
+      volEnvRef.current = Math.max(volEnvRef.current * 0.995, vol, 1e-4);
+      const emph = THREE.MathUtils.clamp(vol / volEnvRef.current, 0, 1);
+
+      // Mouth: continuous open flap (scaled by loudness) + the detected viseme
+      // lip shape on top, so the lips clearly part while talking.
+      const open = 0.4 + 0.4 * Math.abs(Math.sin(time * 9)) * (0.5 + 0.5 * emph);
+      targets["Jaw_Open"] = Math.max(cc.jaw, open);
+      targets["V_Open"] = open * 0.8;
+      if (cc.morph !== "V_Open") targets[cc.morph] = Math.max(targets[cc.morph] ?? 0, cc.amt * 0.5);
+
+      // Brows lift on vocal emphasis (+ a slow idle drift) for expressiveness.
+      const brow = emph * 0.5 + 0.08 * (0.5 + 0.5 * Math.sin(time * 0.6));
+      targets["Brow_Raise_Inner_L"] = brow;
+      targets["Brow_Raise_Inner_R"] = brow;
+      targets["Brow_Raise_Outer_L"] = brow * 0.7;
+      targets["Brow_Raise_Outer_R"] = brow * 0.7;
+
+      // Warm, friendly smile + cheek raise (the encouraging-teacher persona).
+      const smile = 0.18 + emph * 0.18;
+      targets["Mouth_Smile_L"] = smile;
+      targets["Mouth_Smile_R"] = smile;
+      targets["Cheek_Raise_L"] = smile * 0.5;
+      targets["Cheek_Raise_R"] = smile * 0.5;
     } else {
-      // Mouth gently closed at rest.
-      targets["Mouth_Close"] = 0.15;
+      // Relaxed, gently positive resting face.
+      targets["Mouth_Close"] = 0.12;
+      targets["Mouth_Smile_L"] = 0.1;
+      targets["Mouth_Smile_R"] = 0.1;
+    }
+
+    // Eye saccades — small, occasional darts so the gaze feels alive.
+    const sac = saccadeRef.current;
+    sac.next -= delta;
+    if (sac.next <= 0) {
+      sac.x = (Math.random() * 2 - 1) * 0.35;
+      sac.next = 0.8 + Math.random() * 2.2;
+    }
+    if (sac.x >= 0) {
+      targets["Eye_L_Look_R"] = sac.x;
+      targets["Eye_R_Look_R"] = sac.x;
+    } else {
+      targets["Eye_L_Look_L"] = -sac.x;
+      targets["Eye_R_Look_L"] = -sac.x;
     }
 
     // Blinking (independent of speech).
@@ -217,6 +273,8 @@ function GLBAvatar({ isSpeaking, modelUrl = "/models/avatar.glb" }: Avatar3DProp
   const morphMeshesRef = useRef<THREE.Mesh[]>([]);
   const morphValsRef = useRef<Record<string, number>>({});
   const blinkRef = useRef({ next: 1.5, closing: 0 });
+  const volEnvRef = useRef(1e-4);
+  const saccadeRef = useRef({ next: 1, x: 0 });
   const gltfLoader = useMemo(() => new GLTFLoader(), []);
 
   // Load GLB file
@@ -281,9 +339,14 @@ function GLBAvatar({ isSpeaking, modelUrl = "/models/avatar.glb" }: Avatar3DProp
             if (m.specularIntensity !== undefined) m.specularIntensity = 0.2;
             if (m.reflectivity !== undefined) m.reflectivity = 0.2;
             if (m.roughness !== undefined && m.map) m.roughness = Math.max(m.roughness, 0.6);
-            // Soften the skin's normal-map detail so pores/creases don't read
-            // as harsh wrinkles (made her look older than she is).
-            if (isSkin && m.normalMap) m.normalScale.set(0.35, 0.35);
+            // Soften the skin's baked detail: dial down the normal-map creases
+            // and the ambient-occlusion shading that darkens the mouth/chin and
+            // makes her read older than she is.
+            if (isSkin) {
+              if (m.normalMap) m.normalScale.set(0.1, 0.1);
+              m.aoMapIntensity = 0;
+              if (m.aoMap) m.aoMap = null;
+            }
             // Hair cards exported as OPAQUE with a near-white, alpha-less
             // texture → white shards. Tint dark and alpha-test the strands.
             if (isHair) {
@@ -316,20 +379,61 @@ function GLBAvatar({ isSpeaking, modelUrl = "/models/avatar.glb" }: Avatar3DProp
     const time = state.clock.elapsedTime;
     if (!avatarRef.current) return;
 
-    avatarRef.current.position.y = Math.sin(time * 0.8) * 0.04;
-    avatarRef.current.rotation.y = Math.sin(time * 0.3) * 0.08;
+    avatarRef.current.position.y = Math.sin(time * 0.8) * 0.02;
+    avatarRef.current.rotation.y = Math.sin(time * 0.3) * 0.03;
 
     const targets: Record<string, number> = {};
-    for (const name of MOUTH_MORPHS) targets[name] = 0;
+    for (const name of MORPH_NAMES) targets[name] = 0;
 
     const mgr = getLipsyncManager();
     if (isSpeaking && mgr) {
       mgr.processAudio();
-      const cc = VISEME_TO_CC[mgr.viseme] ?? VISEME_TO_CC.viseme_sil;
-      targets[cc.morph] = cc.amt;
-      if (cc.jaw) targets["Jaw_Open"] = cc.jaw;
+
+      // Normalize loudness to 0..1 (wawa's volume scale is arbitrary) to drive
+      // emphasis (brows/cheeks) and scale how wide the mouth opens.
+      const vol = mgr.features?.volume ?? 0;
+      volEnvRef.current = Math.max(volEnvRef.current * 0.995, vol, 1e-4);
+      const emph = THREE.MathUtils.clamp(vol / volEnvRef.current, 0, 1);
+
+      // Mouth: a clear open↔close cycle, widened by loudness. Jaw_Open drops the
+      // jaw and V_Open parts the lips (both needed). Per-viseme lip shapes are
+      // skipped — the consonant shapes pull the lips together and cancel it.
+      const open = (0.12 + 0.88 * Math.abs(Math.sin(time * 6.5))) * (0.6 + 0.4 * emph);
+      targets["Jaw_Open"] = open;
+      targets["V_Open"] = open;
+
+      // Brows lift on vocal emphasis (+ slow idle drift).
+      const brow = emph * 0.5 + 0.08 * (0.5 + 0.5 * Math.sin(time * 0.6));
+      targets["Brow_Raise_Inner_L"] = brow;
+      targets["Brow_Raise_Inner_R"] = brow;
+      targets["Brow_Raise_Outer_L"] = brow * 0.7;
+      targets["Brow_Raise_Outer_R"] = brow * 0.7;
+
+      // Subtle cheek raise on emphasis (smile kept minimal so it doesn't seal
+      // the lips over the open mouth).
+      const cheek = emph * 0.25;
+      targets["Cheek_Raise_L"] = cheek;
+      targets["Cheek_Raise_R"] = cheek;
     } else {
-      targets["Mouth_Close"] = 0.15;
+      // Relaxed, gently positive resting face.
+      targets["Mouth_Close"] = 0.12;
+      targets["Mouth_Smile_L"] = 0.1;
+      targets["Mouth_Smile_R"] = 0.1;
+    }
+
+    // Eye saccades — small, occasional darts so the gaze feels alive.
+    const sac = saccadeRef.current;
+    sac.next -= delta;
+    if (sac.next <= 0) {
+      sac.x = (Math.random() * 2 - 1) * 0.35;
+      sac.next = 0.8 + Math.random() * 2.2;
+    }
+    if (sac.x >= 0) {
+      targets["Eye_L_Look_R"] = sac.x;
+      targets["Eye_R_Look_R"] = sac.x;
+    } else {
+      targets["Eye_L_Look_L"] = -sac.x;
+      targets["Eye_R_Look_L"] = -sac.x;
     }
 
     const blink = blinkRef.current;
