@@ -81,6 +81,14 @@ function FBXAvatar({ isSpeaking, modelUrl = "/models/nat.fbx" }: Avatar3DProps) 
   const blinkRef = useRef({ next: 1.5, closing: 0 });
   const volEnvRef = useRef(1e-4);
   const saccadeRef = useRef({ next: 1, x: 0 });
+  const jawBoneRef = useRef<THREE.Object3D | null>(null);
+  const initialJawRotRef = useRef<THREE.Euler | null>(null);
+
+  // Sync isSpeaking to a ref to avoid stale closures in the useFrame loop
+  const isSpeakingRef = useRef(isSpeaking);
+  useEffect(() => {
+    isSpeakingRef.current = isSpeaking;
+  }, [isSpeaking]);
 
   // Load FBX file
   useEffect(() => {
@@ -105,6 +113,20 @@ function FBXAvatar({ isSpeaking, modelUrl = "/models/nat.fbx" }: Avatar3DProps) 
         const fitScale = targetH / visibleH;
         setFit({ scale: fitScale, y: -fitScale * midLocal });
         
+        // Find the jaw bone to rotate teeth and tongue during speech
+        let jawBone: THREE.Object3D | null = null;
+        fbx.traverse((object: THREE.Object3D) => {
+          if (object instanceof THREE.Bone && /jaw/i.test(object.name)) {
+            if (object.name === "DEF-jaw" || (!jawBone && object.name === "jaw")) {
+              jawBone = object;
+            }
+          }
+        });
+        if (jawBone) {
+          jawBoneRef.current = jawBone;
+          initialJawRotRef.current = (jawBone as THREE.Object3D).rotation.clone();
+        }
+
         // The FBX ships with textures that don't resolve at runtime, so the
         // original Phong materials sample black and the avatar disappears
         // against the dark backdrop. Replace them with a self-lit holographic
@@ -166,7 +188,7 @@ function FBXAvatar({ isSpeaking, modelUrl = "/models/nat.fbx" }: Avatar3DProps) 
     for (const name of MORPH_NAMES) targets[name] = 0;
 
     const mgr = getLipsyncManager();
-    if (isSpeaking && mgr) {
+    if (isSpeakingRef.current && mgr) {
       // Analyze the live audio signal and map the detected Oculus viseme to the
       // model's CC4 blendshapes.
       mgr.processAudio();
@@ -203,6 +225,14 @@ function FBXAvatar({ isSpeaking, modelUrl = "/models/nat.fbx" }: Avatar3DProps) 
       targets["Mouth_Close"] = 0.12;
       targets["Mouth_Smile_L"] = 0.1;
       targets["Mouth_Smile_R"] = 0.1;
+    }
+
+    // Apply jaw bone rotation in sync with Jaw_Open to open the teeth and tongue naturally
+    if (jawBoneRef.current && initialJawRotRef.current) {
+      const jawOpenVal = targets["Jaw_Open"] ?? 0;
+      // Rotate jaw bone down/back (negative X-axis) relative to its initial rest pose rotation.
+      // A factor of -0.08 prevents the mesh distortion (puck effect).
+      jawBoneRef.current.rotation.x = initialJawRotRef.current.x - jawOpenVal * 0.08;
     }
 
     // Eye saccades — small, occasional darts so the gaze feels alive.
@@ -266,7 +296,7 @@ function FBXAvatar({ isSpeaking, modelUrl = "/models/nat.fbx" }: Avatar3DProps) 
 
 // GLB Model Avatar — keeps the embedded textures (skin + clothing) and drives
 // visemes from wawa-lipsync, framed head-to-waist.
-function GLBAvatar({ isSpeaking, modelUrl = "/models/avatar.glb" }: Avatar3DProps) {
+function GLBAvatar({ isSpeaking, viseme, modelUrl = "/models/avatar.glb" }: Avatar3DProps) {
   const [scene, setScene] = useState<THREE.Group | null>(null);
   const [fit, setFit] = useState<{ scale: number; y: number }>({ scale: 1, y: 0 });
   const avatarRef = useRef<THREE.Group>(null);
@@ -275,7 +305,15 @@ function GLBAvatar({ isSpeaking, modelUrl = "/models/avatar.glb" }: Avatar3DProp
   const blinkRef = useRef({ next: 1.5, closing: 0 });
   const volEnvRef = useRef(1e-4);
   const saccadeRef = useRef({ next: 1, x: 0 });
+  const jawBoneRef = useRef<THREE.Object3D | null>(null);
+  const initialJawRotRef = useRef<THREE.Euler | null>(null);
   const gltfLoader = useMemo(() => new GLTFLoader(), []);
+
+  // Sync isSpeaking to a ref to avoid stale closures in the useFrame loop
+  const isSpeakingRef = useRef(isSpeaking);
+  useEffect(() => {
+    isSpeakingRef.current = isSpeaking;
+  }, [isSpeaking]);
 
   // Load GLB file
   useEffect(() => {
@@ -299,6 +337,20 @@ function GLBAvatar({ isSpeaking, modelUrl = "/models/avatar.glb" }: Avatar3DProp
         const targetH = 2.2;
         const fitScale = targetH / visibleH;
         setFit({ scale: fitScale, y: -fitScale * midLocal });
+
+        // Find the jaw bone to rotate teeth and tongue during speech
+        let jawBone: THREE.Object3D | null = null;
+        loadedScene.traverse((object: THREE.Object3D) => {
+          if (object instanceof THREE.Bone && /jaw/i.test(object.name)) {
+            if (object.name === "DEF-jaw" || (!jawBone && object.name === "jaw")) {
+              jawBone = object;
+            }
+          }
+        });
+        if (jawBone) {
+          jawBoneRef.current = jawBone;
+          initialJawRotRef.current = (jawBone as THREE.Object3D).rotation.clone();
+        }
 
         // Collect morph-bearing meshes for lip-sync and fix the exported assets.
         const meshes: THREE.Mesh[] = [];
@@ -329,7 +381,8 @@ function GLBAvatar({ isSpeaking, modelUrl = "/models/avatar.glb" }: Avatar3DProp
             // GLB ships white emissive (blows out to solid white) and
             // metalness=1 on skin/cloth (renders black with no env map).
             if (m.emissive) { m.emissive.setRGB(0, 0, 0); m.emissiveIntensity = 0; }
-            if (m.metalness !== undefined && m.map) m.metalness = 0;
+            if (m.metalness !== undefined) m.metalness = 0;
+            if (m.metalnessMap) m.metalnessMap = null;
             // Kill the mirror-like clearcoat/sheen/transmission that made the
             // face look chrome, and soften specular.
             if (m.clearcoat !== undefined) m.clearcoat = 0;
@@ -338,15 +391,32 @@ function GLBAvatar({ isSpeaking, modelUrl = "/models/avatar.glb" }: Avatar3DProp
             if (m.iridescence !== undefined) m.iridescence = 0;
             if (m.specularIntensity !== undefined) m.specularIntensity = 0.2;
             if (m.reflectivity !== undefined) m.reflectivity = 0.2;
-            if (m.roughness !== undefined && m.map) m.roughness = Math.max(m.roughness, 0.6);
-            // Soften the skin's baked detail: dial down the normal-map creases
-            // and the ambient-occlusion shading that darkens the mouth/chin and
-            // makes her read older than she is.
-            if (isSkin) {
-              if (m.normalMap) m.normalScale.set(0.1, 0.1);
-              m.aoMapIntensity = 0;
+
+            // Make the skin look clean, smooth, and extremely youthful (18 years old)
+            if (isSkin && /skin/i.test(m.name)) {
+              // Completely disable normal maps on skin to remove creases, wrinkles, and the nose spot
+              if (m.normalMap) m.normalMap = null;
+              if (m.normalScale) m.normalScale.set(0, 0);
+              
+              // Clear ambient occlusion to prevent dark/dirty shading
               if (m.aoMap) m.aoMap = null;
+              m.aoMapIntensity = 0;
+              
+              // Clear roughness maps and set a smooth, youthful sheen
+              if (m.roughnessMap) m.roughnessMap = null;
+              m.roughness = 0.35; // Youthful hydrated glow!
+              
+              // Clear other maps that could add noise/spots
+              if (m.bumpMap) m.bumpMap = null;
+              if (m.displacementMap) m.displacementMap = null;
+
+              // Ensure base color is clean white so the texture map displays perfectly
+              if (m.color) m.color.setRGB(1, 1, 1);
+            } else {
+              // Non-skin materials (like clothing)
+              if (m.roughness !== undefined && m.map) m.roughness = Math.max(m.roughness, 0.6);
             }
+
             // Hair cards exported as OPAQUE with a near-white, alpha-less
             // texture → white shards. Tint dark and alpha-test the strands.
             if (isHair) {
@@ -386,8 +456,9 @@ function GLBAvatar({ isSpeaking, modelUrl = "/models/avatar.glb" }: Avatar3DProp
     for (const name of MORPH_NAMES) targets[name] = 0;
 
     const mgr = getLipsyncManager();
-    if (isSpeaking && mgr) {
+    if (isSpeakingRef.current && mgr) {
       mgr.processAudio();
+      const cc = VISEME_TO_CC[mgr.viseme] ?? VISEME_TO_CC.viseme_sil;
 
       // Normalize loudness to 0..1 (wawa's volume scale is arbitrary) to drive
       // emphasis (brows/cheeks) and scale how wide the mouth opens.
@@ -395,12 +466,12 @@ function GLBAvatar({ isSpeaking, modelUrl = "/models/avatar.glb" }: Avatar3DProp
       volEnvRef.current = Math.max(volEnvRef.current * 0.995, vol, 1e-4);
       const emph = THREE.MathUtils.clamp(vol / volEnvRef.current, 0, 1);
 
-      // Mouth: a clear open↔close cycle, widened by loudness. Jaw_Open drops the
-      // jaw and V_Open parts the lips (both needed). Per-viseme lip shapes are
-      // skipped — the consonant shapes pull the lips together and cancel it.
-      const open = (0.12 + 0.88 * Math.abs(Math.sin(time * 6.5))) * (0.6 + 0.4 * emph);
-      targets["Jaw_Open"] = open;
-      targets["V_Open"] = open;
+      // Mouth: continuous open flap (scaled by loudness) + the detected viseme
+      // lip shape on top, so the lips clearly part while talking.
+      const open = 0.4 + 0.4 * Math.abs(Math.sin(time * 9)) * (0.5 + 0.5 * emph);
+      targets["Jaw_Open"] = Math.max(cc.jaw, open);
+      targets["V_Open"] = open * 0.8;
+      if (cc.morph !== "V_Open") targets[cc.morph] = Math.max(targets[cc.morph] ?? 0, cc.amt * 0.5);
 
       // Brows lift on vocal emphasis (+ slow idle drift).
       const brow = emph * 0.5 + 0.08 * (0.5 + 0.5 * Math.sin(time * 0.6));
@@ -411,14 +482,24 @@ function GLBAvatar({ isSpeaking, modelUrl = "/models/avatar.glb" }: Avatar3DProp
 
       // Subtle cheek raise on emphasis (smile kept minimal so it doesn't seal
       // the lips over the open mouth).
-      const cheek = emph * 0.25;
-      targets["Cheek_Raise_L"] = cheek;
-      targets["Cheek_Raise_R"] = cheek;
+      const smile = 0.18 + emph * 0.18;
+      targets["Mouth_Smile_L"] = smile;
+      targets["Mouth_Smile_R"] = smile;
+      targets["Cheek_Raise_L"] = smile * 0.5;
+      targets["Cheek_Raise_R"] = smile * 0.5;
     } else {
       // Relaxed, gently positive resting face.
       targets["Mouth_Close"] = 0.12;
       targets["Mouth_Smile_L"] = 0.1;
       targets["Mouth_Smile_R"] = 0.1;
+    }
+
+    // Apply jaw bone rotation in sync with Jaw_Open to open the teeth and tongue naturally
+    if (jawBoneRef.current && initialJawRotRef.current) {
+      const jawOpenVal = targets["Jaw_Open"] ?? 0;
+      // Rotate jaw bone down/back (negative X-axis) relative to its initial rest pose rotation.
+      // A factor of -0.08 prevents the mesh distortion (puck effect).
+      jawBoneRef.current.rotation.x = initialJawRotRef.current.x - jawOpenVal * 0.08;
     }
 
     // Eye saccades — small, occasional darts so the gaze feels alive.
@@ -497,6 +578,10 @@ function ProceduralAvatar({ isSpeaking }: Avatar3DProps) {
   useFrame((state) => {
     const time = state.clock.elapsedTime;
     
+    if (Math.random() < 0.01) {
+      console.log("ProceduralAvatar useFrame - isSpeaking:", isSpeaking);
+    }
+
     // Blinking
     if (time - lastBlinkRef.current > 3 + Math.random() * 2) {
       isBlinkingRef.current = true;
@@ -608,11 +693,19 @@ export function Avatar3D({ isSpeaking, viseme, modelUrl }: Avatar3DProps) {
     if (modelUrl) {
       // Check if file exists
       fetch(modelUrl, { method: "HEAD" })
-        .then(res => setHasModel(res.ok))
-        .catch(() => setHasModel(false));
+        .then(res => {
+          console.log("Avatar3D fetch HEAD result for", modelUrl, "ok:", res.ok);
+          setHasModel(res.ok);
+        })
+        .catch((err) => {
+          console.error("Avatar3D fetch HEAD error for", modelUrl, err);
+          setHasModel(false);
+        });
     }
   }, [modelUrl]);
   
+  console.log("Avatar3D render - modelUrl:", modelUrl, "hasModel:", hasModel);
+
   return (
     <Suspense fallback={null}>
       {hasModel && modelUrl ? (

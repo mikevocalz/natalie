@@ -101,6 +101,38 @@ const demoPrompts = [
   },
 ];
 
+function ResponseBubble({ promptId, className = "" }: { promptId: number; className?: string }) {
+  const prompt = demoPrompts.find(p => p.id === promptId);
+  if (!prompt) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20, scale: 0.9 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: 10, scale: 0.95 }}
+      transition={{ duration: 0.3 }}
+      className={`p-4 rounded-2xl bg-[rgba(12,22,40,0.9)] border border-[rgba(61,165,255,0.3)] backdrop-blur-xl ${className}`}
+    >
+      <div className="flex items-start gap-3">
+        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-[rgba(61,165,255,0.2)] shrink-0">
+          <Sparkles className="w-4 h-4 text-[#3da5ff]" />
+        </div>
+        <div>
+          <div className="font-mono text-[10px] tracking-[0.2em] uppercase text-[#3da5ff] mb-1">
+            Natalie
+          </div>
+          <p className="text-sm text-[#eef2f7] leading-relaxed">
+            {prompt.response}
+          </p>
+          <div className="mt-2 text-[11px] text-[#6c7e90]">
+            Action: {prompt.action}
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
 export default function DemoSection() {
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true, margin: "-100px" });
@@ -257,33 +289,19 @@ export default function DemoSection() {
             {/* Response bubble */}
             <AnimatePresence>
               {activePrompt !== null && (
-                <motion.div
-                  initial={{ opacity: 0, y: 20, scale: 0.9 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                  transition={{ duration: 0.3 }}
-                  className="absolute bottom-20 left-4 right-4 p-4 rounded-2xl bg-[rgba(12,22,40,0.9)] border border-[rgba(61,165,255,0.3)] backdrop-blur-xl"
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-[rgba(61,165,255,0.2)] shrink-0">
-                      <Sparkles className="w-4 h-4 text-[#3da5ff]" />
-                    </div>
-                    <div>
-                      <div className="font-mono text-[10px] tracking-[0.2em] uppercase text-[#3da5ff] mb-1">
-                        Natalie
-                      </div>
-                      <p className="text-sm text-[#eef2f7] leading-relaxed">
-                        {demoPrompts.find(p => p.id === activePrompt)?.response}
-                      </p>
-                      <div className="mt-2 text-[11px] text-[#6c7e90]">
-                        Action: {demoPrompts.find(p => p.id === activePrompt)?.action}
-                      </div>
-                    </div>
-                  </div>
-                </motion.div>
+                <ResponseBubble
+                  promptId={activePrompt}
+                  className="hidden sm:block absolute bottom-20 left-4 right-4"
+                />
               )}
             </AnimatePresence>
           </motion.div>
+
+          <AnimatePresence>
+            {activePrompt !== null && (
+              <ResponseBubble promptId={activePrompt} className="sm:hidden -mt-3" />
+            )}
+          </AnimatePresence>
 
           {/* Prompts Panel */}
           <motion.div
